@@ -366,6 +366,11 @@ def create_build_spec(pkg_name, pkg_doc, parameters, dependency_id_map,
     # build commands
     commands = list(dependency_commands)
     commands.append({"set": "BASH", "nohash_value": parameters['BASH']})
+
+    for par_name in parameters:
+        if par_name.startswith('HASHDIST_BUILDENV_'):
+            commands.insert(0, {"set": par_name[18:], "nohash_value": parameters[par_name]})
+
     if 'PATH' in parameters:
         commands.insert(0, {"set": "PATH", "nohash_value": parameters['PATH']})
     commands.append({"cmd": ["$BASH", "_hashdist/build.sh"]})
