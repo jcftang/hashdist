@@ -8,6 +8,7 @@ def add_build_args(ap):
     ap.add_argument('-j', metavar='CPUCOUNT', default=1, type=int, help='number of CPU cores to utilize')
     ap.add_argument('-k', metavar='KEEP_BUILD', default="never", type=str,
             help='keep build directory: always, never, error (default: never)')
+    ap.add_argument('-c', "--copy", help='Create a copy of the profile')
 
 def add_profile_args(ap):
     ap.add_argument('-p', '--profile', default='default.yaml', help='yaml file describing profile to build (default: default.yaml)')
@@ -52,7 +53,8 @@ class Build(ProfileFrontendBase):
         ap.add_argument('package', nargs='?', help='package to build (default: build all)')
 
     def profile_builder_action(self):
-        from ..core import atomic_symlink
+        from ..core import atomic_symlink, make_profile
+        from ..core.run_job import unpack_virtuals_envvar
 
         if not self.args.profile.endswith('.yaml'):
             self.ctx.error('profile filename must end with yaml')
@@ -72,6 +74,12 @@ class Build(ProfileFrontendBase):
                 sys.stdout.write('Profile build successful, link at: %s\n' % profile_symlink)
             artifact_id, artifact_dir = self.builder.build_profile(self.ctx.get_config())
             atomic_symlink(artifact_dir, profile_symlink)
+
+            if self.args.copy:
+                sys.stdout.write('Creating a copy at: %s\n' % self.args.copy)
+                virtuals = unpack_virtuals_envvar(os.environ.get('HDIST_VIRTUALS', ''))
+                make_profile(logger, ctx.build_store, [{"id": profile_aid}],
+                        args.copy, virtuals, hdist_config)
 
 
 @register_subcommand
