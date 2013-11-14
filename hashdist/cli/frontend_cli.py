@@ -1,8 +1,13 @@
+from __future__ import print_function
+
 import os
 import sys
 import shutil
 from pprint import pprint
+import subprocess
+
 from .main import register_subcommand
+from ..core import BuildStore
 
 def add_build_args(ap):
     ap.add_argument('-j', metavar='CPUCOUNT', default=1, type=int, help='number of CPU cores to utilize')
@@ -188,3 +193,109 @@ class BuildDir(ProfileFrontendBase):
         ensure_target(self.args.target)
         build_spec = self.builder.get_build_spec(self.args.package)
         self.build_store.prepare_build_dir(self.source_cache, build_spec, self.args.target)
+
+def system_lib(name):
+    if name == "":
+        return True
+    system_libs = [
+            # linux
+            "linux-vdso",
+            "linux-gate",
+
+            # libc
+            "libc",
+            "libm",
+            "libutil",
+            "libcrypt",
+            "libpthread",
+            "libdl",
+            "librt",
+            "libnsl",
+
+            # gcc
+            "libstdc++",
+            "libgfortran",
+            "libquadmath",
+            "libgcc_s",
+
+            # X11
+            "libX11",
+            "libXau",
+            "libXext",
+            "libxcb",
+            "libXdmcp",
+            ]
+
+    for lib in system_libs:
+        if name.startswith(lib + ".so"):
+            return True
+    return False
+
+def check_lib(filename, artifact_path):
+    s = subprocess.check_output(["ldd", filename])
+    lines = s.split("\n")
+    # Fill the libs_dict with library names, paths and addresses
+    libs_dict = {}
+    for line in lines:
+        line = line.strip()
+        if line == "":
+            continue
+        if "=>" in line:
+            lib, rest = line.split("=>")
+        else:
+            lib = ""
+            rest = line
+        rest = rest.strip()
+        idx = rest.rfind(" ")
+        if idx == -1:
+            path = ""
+            address = rest
+        else:
+            path = rest[:idx]
+            address = rest[idx:]
+
+        lib = lib.strip()
+        path = path.strip()
+        address = address.strip()
+        libs_dict[lib] = (path, address)
+
+    for lib in libs_dict:
+        if system_lib(lib):
+            continue
+        path, address = libs_dict[lib]
+        if path.startswith(artifact_path):
+            # Our lib
+            continue
+        print("Lib:", filename)
+        print(lib, path, address)
+        print()
+
+def check_libs(profile, artifact_path):
+    s = subprocess.check_output(["find", "-L", profile + "/", "-name", "*.so*"])
+    libs = s.split()
+    for lib in libs:
+        check_lib(lib, artifact_path)
+
+@register_subcommand
+class CheckLibs(object):
+    """
+    Check that .so libraries are linked against our own libraries
+
+    Example::
+
+        $ hit check-libs default
+
+    """
+
+    command = 'check-libs'
+
+    @staticmethod
+    def setup(ap):
+        ap.add_argument('profile', help='profile to check')
+
+    @staticmethod
+    def run(ctx, args):
+        profile_path = args.profile
+        build_store = BuildStore.create_from_config(ctx.get_config(), ctx.logger)
+        print("Checking libs in '%s'..." % profile_path)
+        check_libs(profile_path, build_store.artifact_root)
