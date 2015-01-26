@@ -855,6 +855,7 @@ class TarballHandler(object):
         try:
             with closing(self.tarfileobj_from_name(filename)) as tarfileobj:
                 with closing(tarfile.open(fileobj=tarfileobj, mode=self.read_mode)) as archive:
+	            archive.dereference = True
                     # Just in case, make sure we can actually read the archive:
                     members = archive.getmembers()
                 return True
@@ -871,6 +872,7 @@ class TarballHandler(object):
 
         with closing(self.tarfileobj_from_data(archive_data)) as tarfileobj:
             with closing(tarfile.open(fileobj=tarfileobj, mode=self.read_mode)) as archive:
+		archive.dereference = True
                 members = archive.getmembers()
                 prefix_len = len(common_path_prefix([member.name for member in members
                                                      if member.type != tarfile.DIRTYPE]))
@@ -888,7 +890,12 @@ class TarballHandler(object):
                     if not os.path.abspath(pjoin(target_dir, member.name)).startswith(target_dir):
                         raise SecurityError("Archive attempted to break out of target dir "
                                             "with filename: %s" % member.name)
-                    member.name = member.name[prefix_len:]
+                    if member.islnk():
+                        self.logger.warning("Archive member contains a symlink: %s, it will be "
+                                            "dereferenced" % member.name)
+                        continue
+                    else:
+                        member.name = member.name[prefix_len:]
                     filtered_members.append(member)
                 try:
                     archive.extractall(target_dir, filtered_members)
