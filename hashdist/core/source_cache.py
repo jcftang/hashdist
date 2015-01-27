@@ -890,7 +890,10 @@ class TarballHandler(object):
                                             "with filename: %s" % member.name)
                     member.name = member.name[prefix_len:]
                     filtered_members.append(member)
-                archive.extractall(target_dir, filtered_members)
+                try:
+                    archive.extractall(target_dir, filtered_members)
+                except:
+                    self.logger.error("Failed to extract all")
 
     def tarfileobj_from_name(self, filename):
         return open(filename, 'r');
