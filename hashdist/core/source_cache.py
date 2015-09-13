@@ -891,6 +891,7 @@ class TarballHandler(object):
                         raise SecurityError("Archive attempted to break out of target dir "
                                             "with filename: %s" % member.name)
                     if member.islnk():
+                        member.name =  os.path.join(target_dir, member.name)
                         self.logger.warning("Archive member contains a symlink: %s, it will be "
                                             "dereferenced" % member.name)
                         continue
